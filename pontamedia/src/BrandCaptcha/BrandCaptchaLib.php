@@ -75,7 +75,7 @@ class BrandCaptchaLib
    *
    * @const string
    */
-  const API_HOST = 'dev.api.pontamedia.net';
+  const API_HOST = 'api.pontamedia.net';
 
   /**
    * Api verify path of brandcaptcha
