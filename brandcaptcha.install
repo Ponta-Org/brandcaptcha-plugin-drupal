@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Installation file for BandCaptcha module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function brandcaptcha_uninstall() {
+  variable_del('brandcaptcha_public_key');
+  variable_del('brandcaptcha_private_key');
+  variable_del('brandcaptcha_lang');
+}

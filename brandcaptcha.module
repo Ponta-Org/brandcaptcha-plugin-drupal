@@ -1,0 +1,122 @@
+<?php
+
+/**
+ * @file
+ * Verifies if user is a human without necessity to solve a BandCaptcha.
+ */
+require_once dirname(__FILE__) . '/pontamedia/src/BrandCaptcha/BrandCaptchaLib.php';
+
+/**
+ * Implements hook_help().
+ */
+function brandcaptcha_help($path, $arg) {
+  switch ($path) {
+  case 'admin/config/people/captcha/brandcaptcha':
+    return t(
+      'Integrates PontaMedia BandCaptcha anti-spam solutions with drupal', 
+      array('@url' => 'http://www.pontamedia.com/en/brandCaptcha')
+    );
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function brandcaptcha_menu() {
+  $items['admin/config/people/captcha/brandcaptcha'] = array(
+    'title' => 'BrandCaptcha',
+    'description' => 'Integrates PontaMedia BrandCaptcha anti-spam solutions with drupal.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('brandcaptcha_admin_settings'),
+    'access arguments' => array('administer brandcaptcha'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'brandcaptcha.admin.inc',
+    'weight' => 1,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function brandcaptcha_permission() {
+  return array(
+    'administer brandcaptcha' => array(
+      'title' => t('Administer BandCaptcha'),
+      'description' => t('Administer BandCaptcha settings'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_captcha().
+ */
+function brandcaptcha_captcha($op, $captcha_type = '') {
+  global $language;
+
+  switch($op) {
+    case 'list':
+      return array('BrandCaptcha');
+    case 'generate':
+      $captcha = array();
+
+      if ($captcha_type == 'BrandCaptcha') {
+        $brandcaptcha_public_key = variable_get('brandcaptcha_public_key', '');
+        $brandcaptcha_private_key = variable_get('brandcaptcha_private_key', '');
+        $brandcaptcha_lang = variable_get('brandcaptcha_lang', 'es');
+
+        if (!empty($brandcaptcha_public_key) && !empty($brandcaptcha_private_key)) {
+          $brandCaptchaLib = new \BrandCaptcha\BrandCaptchaLib();
+
+          $captcha['solution'] = TRUE;
+          $captcha['captcha_validate'] = 'brandcaptcha_captcha_validation';
+          $captcha['form']['captcha_response'] = array(
+            '#type' => 'hidden',
+            '#value' => 'BrandCaptcha',
+          );
+
+          $format = <<<FORMAT
+            <script type='text/javascript'>
+              var brandcaptchaOptions = { lang : '$brandcaptcha_lang' };
+            </script>
+FORMAT;
+
+          $captcha['form']['recaptcha_widget'] = array(
+            '#markup' => '<div></div>',
+            '#suffix' => $format . $brandCaptchaLib->brandcaptchaGetHtml($brandcaptcha_public_key),
+          );
+        }
+      } else {
+        // Fallback to Math captcha as BrandCaptcha is not configured.
+        $captcha = captcha_captcha('generate', 'Math');
+      }
+
+      return $captcha;
+  }
+}
+
+/**
+ * CAPTCHA Callback; Validates the BrandCaptcha code.
+ */
+function brandcaptcha_captcha_validation($solution, $response, $element, $form_state) {
+  if (empty($_POST['brand_cap_answer']) || $_POST['brand_cap_answer'] == '') {
+    return false;
+  }
+
+  $brandCaptchaLib = new \BrandCaptcha\BrandCaptchaLib();
+  $brandcaptcha_private_key = variable_get('brandcaptcha_private_key', '');
+
+  $response = $brandCaptchaLib->brandcaptchaCheckAnswer($brandcaptcha_private_key, ip_address(), $_POST['brand_cap_challenge'], $_POST['brand_cap_answer']);
+
+  // response is bad, add incorrect response error
+  if ($response->getIsValid()) {
+    return true;
+  } else {
+    if ($response->getError() == 'incorrect-captcha-sol') {
+      watchdog('reCAPTCHA web service', '@error', array('@error' => "<strong>ERROR</strong>: That brandCAPTCHA response was incorrect."), WATCHDOG_ERROR);
+    }
+  }
+
+  return false;
+}
